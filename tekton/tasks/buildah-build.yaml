@@ -58,6 +58,7 @@ spec:
         echo "Context: ${CONTEXT}"
 
         # Strip BuildKit --platform= directives which buildah cannot parse
+        # Also skip --build-arg since ARG already has a default in the Dockerfile
         cp "${DOCKERFILE}" /tmp/Dockerfile.buildah
         sed -i 's/^FROM --platform=[^ ]* /FROM /g' /tmp/Dockerfile.buildah
 
@@ -65,7 +66,6 @@ spec:
           --storage-driver=overlay \
           --tls-verify=false \
           -f /tmp/Dockerfile.buildah \
-          --build-arg BUILDPLATFORM=linux/amd64 \
           -t "${FULL_IMG}" \
           "${CONTEXT}"
 
