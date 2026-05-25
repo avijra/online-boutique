@@ -41,7 +41,6 @@ spec:
         echo "=== buildah-build: ${SVC} ==="
         echo "Image: ${FULL_IMG}"
 
-        # Find Dockerfile
         if [ -f "src/${SVC}/Dockerfile" ]; then
           DOCKERFILE="src/${SVC}/Dockerfile"
           CONTEXT="src/${SVC}/"
@@ -57,15 +56,8 @@ spec:
         echo "Dockerfile: ${DOCKERFILE}"
         echo "Context: ${CONTEXT}"
 
-        # Configure unqualified search registries so buildah can pull from Docker Hub
         mkdir -p /tmp/containers
-        cat > /tmp/containers/registries.conf <<'REGEOF'
-unqualified-search-registries = ["docker.io", "quay.io", "registry.fedoraproject.org"]
-
-[[registry]]
-prefix = "docker.io"
-location = "docker.io"
-REGEOF
+        printf '[registries.search]\nregistries = ["docker.io", "quay.io", "registry.fedoraproject.org"]\n' > /tmp/containers/registries.conf
 
         echo "=== Building ${SVC} ==="
         buildah bud \
@@ -79,7 +71,6 @@ REGEOF
         echo "=== Pushing ${FULL_IMG} ==="
         buildah push --storage-driver=overlay --tls-verify=false "${FULL_IMG}"
 
-        # Get digest
         DIGEST=$(buildah inspect --type image "${FULL_IMG}" 2>/dev/null | grep -o '"digest":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
         echo -n "${DIGEST}" | tee /tekton/results/image_digest
         echo -n "${FULL_IMG}" | tee /tekton/results/image_url
