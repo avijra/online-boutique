@@ -1,0 +1,60 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: buildah-build
+  namespace: online-boutique-cicd
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: image_registry
+      type: string
+      default: "image-registry.openshift-image-registry.svc:5000"
+    - name: image_namespace
+      type: string
+      default: "online-boutique-cicd"
+    - name: revision
+      type: string
+      description: Git commit SHA for image tag
+    - name: service
+      type: string
+      description: Specific service to build (e.g. frontend)
+  results:
+    - name: image_digest
+    - name: image_url
+  steps:
+    - name: build
+      image: registry.redhat.io/openshift-pipelines/pipelines-scc-sec-buildah-rhel9:latest
+      workingDir: /workspace/source
+      securityContext:
+        capabilities:
+          add: ["SETFCAP"]
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+
+        SVC="$(params.service)"
+        REG="$(params.image_registry)/$(params.image_namespace)"
+        TAG="${SVC}:$(params.revision)"
+        FULL_IMG="${REG}/${TAG}"
+
+        DOCKERFILE="src/${SVC}/Dockerfile"
+        if [ ! -f "${DOCKERFILE}" ]; then
+          echo "No Dockerfile at ${DOCKERFILE}, checking alternate locations..."
+          DOCKERFILE=$(find src/"${SVC}" -name Dockerfile | head -1)
+        fi
+
+        echo "=== Building ${SVC} from ${DOCKERFILE} ==="
+        buildah bud \
+          --storage-driver=overlay \
+          --tls-verify=false \
+          -f "${DOCKERFILE}" \
+          -t "${FULL_IMG}" \
+          src/"${SVC}"/
+
+        echo "=== Pushing ${FULL_IMG} ==="
+        buildah push --storage-driver=overlay --tls-verify=false "${FULL_IMG}"
+
+        DIGEST=$(buildah images --format '{{.Digest}}' "${FULL_IMG}" 2>/dev/null | head -1)
+        echo -n "${DIGEST}" | tee /tekton/results/image_digest
+        echo -n "${FULL_IMG}" | tee /tekton/results/image_url

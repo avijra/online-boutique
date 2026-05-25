@@ -1,0 +1,20 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: online-boutique-github-listener
+  namespace: online-boutique-cicd
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: github-push
+      interceptors:
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                body.ref in ['refs/heads/main', 'refs/heads/master']
+      bindings:
+        - ref: online-boutique-github-push
+      template:
+        ref: online-boutique-pipeline-template

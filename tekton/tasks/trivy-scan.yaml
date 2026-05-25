@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: trivy-scan
+  namespace: online-boutique-cicd
+spec:
+  params:
+    - name: image_url
+      type: string
+      description: Full image URL to scan
+    - name: severity
+      type: string
+      default: "HIGH,CRITICAL"
+  steps:
+    - name: scan
+      image: docker.io/aquasec/trivy:latest
+      script: |
+        #!/bin/sh
+        set -e
+        echo "=== Trivy Vulnerability Scan ==="
+        echo "Image: $(params.image_url)"
+        echo "Severity threshold: $(params.severity)"
+
+        trivy image \
+          --severity "$(params.severity)" \
+          --exit-code 1 \
+          --format table \
+          --no-progress \
+          --ignore-unfixed \
+          "$(params.image_url)" 2>&1
+
+        echo "[OK] No $(params.severity) vulnerabilities found."

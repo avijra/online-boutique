@@ -1,0 +1,30 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hadolint
+  namespace: online-boutique-cicd
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: dockerfile_paths
+      type: string
+      default: "src/*/Dockerfile"
+      description: Glob pattern for Dockerfiles to lint
+  steps:
+    - name: lint
+      image: docker.io/hadolint/hadolint:latest-alpine
+      script: |
+        #!/bin/sh
+        set -e
+        EXIT_CODE=0
+        echo "=== hadolint: Dockerfile Linting ==="
+        for df in $(find /workspace/source/ -name Dockerfile -type f 2>/dev/null); do
+          echo "--- Linting: ${df} ---"
+          hadolint "${df}" || EXIT_CODE=1
+        done
+        if [ ${EXIT_CODE} -ne 0 ]; then
+          echo "[FAIL] hadolint found issues. Fix them before continuing."
+          exit 1
+        fi
+        echo "[OK] All Dockerfiles pass hadolint."

@@ -1,0 +1,26 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: syft-sbom
+  namespace: online-boutique-cicd
+spec:
+  params:
+    - name: image_url
+      type: string
+      description: Full image URL to generate SBOM for
+  results:
+    - name: sbom_spdx
+    - name: sbom_cyclonedx
+  steps:
+    - name: generate-sbom
+      image: docker.io/anchore/syft:latest
+      script: |
+        #!/bin/sh
+        set -e
+        echo "=== Syft SBOM Generation ==="
+        echo "Image: $(params.image_url)"
+
+        syft "$(params.image_url)" -o spdx-json | tee /tekton/results/sbom_spdx
+        syft "$(params.image_url)" -o cyclonedx-json | tee /tekton/results/sbom_cyclonedx
+
+        echo "[OK] SBOM generated (SPDX + CycloneDX)."

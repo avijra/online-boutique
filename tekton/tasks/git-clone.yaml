@@ -1,0 +1,38 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: git-clone
+  namespace: online-boutique-cicd
+spec:
+  workspaces:
+    - name: output
+      description: The git repo will be cloned onto this volume
+  params:
+    - name: url
+      type: string
+      description: Git repository URL
+    - name: revision
+      type: string
+      default: "main"
+      description: Branch/tag/commit to clone
+    - name: subdirectory
+      type: string
+      default: ""
+      description: Subdirectory inside workspace to clone into
+  results:
+    - name: commit
+      description: The commit SHA that was checked out
+  steps:
+    - name: clone
+      image: registry.access.redhat.com/ubi9/ubi-minimal:9.4
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+        TARGET="/workspace/output/$(params.subdirectory)"
+        rm -rf "${TARGET}"
+        mkdir -p "${TARGET}"
+        microdnf install -y git > /dev/null 2>&1
+        git clone --depth 1 --branch "$(params.revision)" "$(params.url)" "${TARGET}"
+        cd "${TARGET}"
+        RESULT_SHA="$(git rev-parse HEAD)"
+        echo -n "${RESULT_SHA}" | tee /tekton/results/commit

@@ -1,0 +1,11 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: online-boutique-github-push
+  namespace: online-boutique-cicd
+spec:
+  params:
+    - name: repo-url
+      value: "$(body.repository.clone_url)"
+    - name: revision
+      value: "$(body.head_commit.id)"

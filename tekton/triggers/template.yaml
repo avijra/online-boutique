@@ -1,0 +1,27 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: online-boutique-pipeline-template
+  namespace: online-boutique-cicd
+spec:
+  params:
+    - name: repo-url
+    - name: revision
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: online-boutique-ci-
+        namespace: online-boutique-cicd
+      spec:
+        pipelineRef:
+          name: online-boutique-full-monty
+        params:
+          - name: repo-url
+            value: "$(tt.params.repo-url)"
+          - name: revision
+            value: "$(tt.params.revision)"
+        workspaces:
+          - name: shared-data
+            persistentVolumeClaim:
+              claimName: online-boutique-workspace

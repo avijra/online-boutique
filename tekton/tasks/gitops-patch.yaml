@@ -1,0 +1,77 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: gitops-patch
+  namespace: online-boutique-cicd
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: service
+      type: string
+    - name: image_url
+      type: string
+    - name: gitops_repo_url
+      type: string
+    - name: gitops_branch
+      type: string
+      default: "main"
+    - name: manifest_path
+      type: string
+      default: "k8s"
+  steps:
+    - name: patch-and-push
+      image: registry.access.redhat.com/ubi9/ubi-minimal:9.4
+      script: |
+        #!/bin/bash
+        set -euo pipefail
+
+        microdnf install -y git > /dev/null 2>&1
+
+        SVC="$(params.service)"
+        IMG="$(params.image_url)"
+        MANIFEST="$(params.manifest_path)/${SVC}.yaml"
+
+        echo "=== GitOps Patch: ${SVC} ==="
+        echo "Updating image to: ${IMG}"
+
+        # Clone the GitOps manifest repo
+        git clone --depth 1 --branch "$(params.gitops_branch)" "$(params.gitops_repo_url)" /tmp/gitops-repo
+        cd /tmp/gitops-repo
+
+        # Patch the image value for this service
+        if [ -f "${MANIFEST}" ]; then
+          sed -i "s|image:.*|image: ${IMG}|g" "${MANIFEST}"
+          cat "${MANIFEST}"
+        else
+          echo "[WARN] Manifest ${MANIFEST} not found! Creating one."
+          mkdir -p "$(dirname ${MANIFEST})"
+          cat > "${MANIFEST}" << YAMLEND
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${SVC}
+          namespace: online-boutique
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: ${SVC}
+          template:
+            metadata:
+              labels:
+                app: ${SVC}
+            spec:
+              containers:
+                - name: ${SVC}
+                  image: ${IMG}
+        YAMLEND
+        fi
+
+        git config user.email "pipeline@online-boutique.local"
+        git config user.name "Tekton Pipeline"
+        git add "${MANIFEST}"
+        git commit -m "ci: update ${SVC} image to ${IMG}" || echo "No changes to commit"
+        git push origin "$(params.gitops_branch)"
+
+        echo "[OK] Manifest updated and pushed."

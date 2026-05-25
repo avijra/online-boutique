@@ -1,0 +1,129 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: online-boutique-full-monty
+  namespace: online-boutique-cicd
+spec:
+  workspaces:
+    - name: shared-data
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+      default: "main"
+    - name: image-registry
+      type: string
+      default: "image-registry.openshift-image-registry.svc:5000"
+    - name: image-namespace
+      type: string
+      default: "online-boutique-cicd"
+    - name: gitops-repo-url
+      type: string
+      default: "https://github.com/avijra/online-boutique.git"
+    - name: gitops-branch
+      type: string
+      default: "main"
+    - name: services-to-build
+      type: string
+      default: "adservice,cartservice,checkoutservice,currencyservice,emailservice,frontend,loadgenerator,paymentservice,productcatalogservice,recommendationservice,shippingservice"
+  tasks:
+    # --- STAGE 1: Clone ---
+    - name: clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: "$(params.repo-url)"
+        - name: revision
+          value: "$(params.revision)"
+        - name: subdirectory
+          value: "source"
+      workspaces:
+        - name: output
+          workspace: shared-data
+
+    # --- STAGE 2: Lint + Test (parallel) ---
+    - name: hadolint
+      runAfter: [clone]
+      taskRef:
+        name: hadolint
+      params:
+        - name: dockerfile_paths
+          value: "src/*/Dockerfile"
+      workspaces:
+        - name: source
+          workspace: shared-data
+          subPath: source
+
+    - name: unit-tests
+      runAfter: [clone]
+      taskRef:
+        name: unit-tests
+      workspaces:
+        - name: source
+          workspace: shared-data
+          subPath: source
+
+    # --- STAGE 3-7: Build → Scan → SBOM → Sign → GitOps (per service) ---
+    - name: build-all
+      runAfter: [hadolint, unit-tests]
+      taskRef:
+        name: buildah-build
+      workspaces:
+        - name: source
+          workspace: shared-data
+          subPath: source
+      params:
+        - name: service
+          value: "$(params.services-to-build)"
+        - name: revision
+          value: "$(params.revision)"
+        - name: image_registry
+          value: "$(params.image-registry)"
+        - name: image_namespace
+          value: "$(params.image-namespace)"
+
+    - name: trivy-scan
+      runAfter: [build-all]
+      taskRef:
+        name: trivy-scan
+      params:
+        - name: image_url
+          value: "$(tasks.build-all.results.image_url)"
+
+    - name: syft-sbom
+      runAfter: [trivy-scan]
+      taskRef:
+        name: syft-sbom
+      params:
+        - name: image_url
+          value: "$(tasks.build-all.results.image_url)"
+
+    - name: cosign-sign
+      runAfter: [syft-sbom]
+      taskRef:
+        name: cosign-sign
+      params:
+        - name: image_url
+          value: "$(tasks.build-all.results.image_url)"
+        - name: image_digest
+          value: "$(tasks.build-all.results.image_digest)"
+
+    - name: gitops-patch
+      runAfter: [cosign-sign]
+      taskRef:
+        name: gitops-patch
+      workspaces:
+        - name: source
+          workspace: shared-data
+          subPath: source
+      params:
+        - name: service
+          value: "$(params.services-to-build)"
+        - name: image_url
+          value: "$(tasks.build-all.results.image_url)"
+        - name: gitops_repo_url
+          value: "$(params.gitops-repo-url)"
+        - name: gitops_branch
+          value: "$(params.gitops-branch)"

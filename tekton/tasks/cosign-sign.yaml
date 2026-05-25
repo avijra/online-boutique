@@ -1,0 +1,35 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cosign-sign
+  namespace: online-boutique-cicd
+spec:
+  params:
+    - name: image_url
+      type: string
+      description: Full image URL to sign
+    - name: image_digest
+      type: string
+      default: ""
+  steps:
+    - name: sign
+      image: gcr.io/projectsigstore/cosign:latest
+      script: |
+        #!/bin/sh
+        set -e
+        echo "=== Cosign Keyless Signing ==="
+        IMG="$(params.image_url)"
+        DIG="$(params.image_digest)"
+
+        if [ -n "${DIG}" ]; then
+          IMG="${IMG}@${DIG}"
+        fi
+
+        echo "Signing: ${IMG}"
+        cosign sign \
+          --yes \
+          --fulcio-url https://fulcio.sigstore.dev \
+          --rekor-url https://rekor.sigstore.dev \
+          "${IMG}" 2>&1
+
+        echo "[OK] Image signed via Fulcio/Rekor."
