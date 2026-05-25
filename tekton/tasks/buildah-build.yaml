@@ -4,27 +4,27 @@ metadata:
   name: buildah-build
   namespace: online-boutique-cicd
 spec:
-  workspaces:
-    - name: source
   params:
+    - name: service
+      type: string
+      description: "Single service name to build"
+    - name: revision
+      type: string
+      description: "Git commit SHA for image tag"
     - name: image_registry
       type: string
       default: "image-registry.openshift-image-registry.svc:5000"
     - name: image_namespace
       type: string
       default: "online-boutique-cicd"
-    - name: revision
-      type: string
-      description: Git commit SHA for image tag
-    - name: service
-      type: string
-      description: Specific service to build (e.g. frontend)
+  workspaces:
+    - name: source
   results:
     - name: image_digest
     - name: image_url
   steps:
     - name: build
-      image: registry.redhat.io/openshift-pipelines/pipelines-scc-sec-buildah-rhel9:latest
+      image: quay.io/buildah/stable:latest
       workingDir: /workspace/source
       securityContext:
         capabilities:
@@ -38,23 +38,37 @@ spec:
         TAG="${SVC}:$(params.revision)"
         FULL_IMG="${REG}/${TAG}"
 
-        DOCKERFILE="src/${SVC}/Dockerfile"
-        if [ ! -f "${DOCKERFILE}" ]; then
-          echo "No Dockerfile at ${DOCKERFILE}, checking alternate locations..."
-          DOCKERFILE=$(find src/"${SVC}" -name Dockerfile | head -1)
+        echo "=== buildah-build: ${SVC} ==="
+        echo "Image: ${FULL_IMG}"
+
+        # Find Dockerfile
+        if [ -f "src/${SVC}/Dockerfile" ]; then
+          DOCKERFILE="src/${SVC}/Dockerfile"
+          CONTEXT="src/${SVC}/"
+        else
+          DOCKERFILE=$(find src -path "*/${SVC}/*/Dockerfile" -o -name "Dockerfile" 2>/dev/null | head -1 || true)
+          if [ -z "${DOCKERFILE}" ]; then
+            echo "[FAIL] Cannot find Dockerfile for ${SVC}"
+            exit 1
+          fi
+          CONTEXT=$(dirname "${DOCKERFILE}")
         fi
 
-        echo "=== Building ${SVC} from ${DOCKERFILE} ==="
+        echo "Dockerfile: ${DOCKERFILE}"
+        echo "Context: ${CONTEXT}"
+
         buildah bud \
           --storage-driver=overlay \
           --tls-verify=false \
           -f "${DOCKERFILE}" \
           -t "${FULL_IMG}" \
-          src/"${SVC}"/
+          "${CONTEXT}"
 
         echo "=== Pushing ${FULL_IMG} ==="
         buildah push --storage-driver=overlay --tls-verify=false "${FULL_IMG}"
 
-        DIGEST=$(buildah images --format '{{.Digest}}' "${FULL_IMG}" 2>/dev/null | head -1)
+        # Get digest via buildah inspect (avoids Go template curly-brace issues)
+        DIGEST=$(buildah inspect --type image "${FULL_IMG}" 2>/dev/null | grep -o '"digest":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
         echo -n "${DIGEST}" | tee /tekton/results/image_digest
         echo -n "${FULL_IMG}" | tee /tekton/results/image_url
+        echo "[OK] ${FULL_IMG} built and pushed."
