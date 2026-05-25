@@ -57,10 +57,17 @@ spec:
         echo "Dockerfile: ${DOCKERFILE}"
         echo "Context: ${CONTEXT}"
 
-        # Strip BuildKit --platform= directives which buildah cannot parse
-        # Also skip --build-arg since ARG already has a default in the Dockerfile
+        # Strip BuildKit directives that buildah cannot parse:
+        # 1. FROM --platform=... (buildah doesn't support this syntax)
+        # 2. ARG BUILDPLATFORM=... (buildah treats BUILDPLATFORM as built-in, rejects redefinition)
         cp "${DOCKERFILE}" /tmp/Dockerfile.buildah
-        sed -i 's/^FROM --platform=[^ ]* /FROM /g' /tmp/Dockerfile.buildah
+        sed -i \
+          -e 's/^FROM --platform=[^ ]* /FROM /g' \
+          -e '/^ARG BUILDPLATFORM=/d' \
+          /tmp/Dockerfile.buildah
+
+        echo "=== Sanitized Dockerfile ==="
+        cat /tmp/Dockerfile.buildah
 
         buildah bud \
           --storage-driver=overlay \
