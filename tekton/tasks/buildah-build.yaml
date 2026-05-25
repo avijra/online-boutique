@@ -57,17 +57,22 @@ spec:
         echo "Dockerfile: ${DOCKERFILE}"
         echo "Context: ${CONTEXT}"
 
+        # Strip BuildKit --platform= directives which buildah cannot parse
+        cp "${DOCKERFILE}" /tmp/Dockerfile.buildah
+        sed -i 's/^FROM --platform=[^ ]* /FROM /g' /tmp/Dockerfile.buildah
+
         buildah bud \
           --storage-driver=overlay \
           --tls-verify=false \
-          -f "${DOCKERFILE}" \
+          -f /tmp/Dockerfile.buildah \
+          --build-arg BUILDPLATFORM=linux/amd64 \
           -t "${FULL_IMG}" \
           "${CONTEXT}"
 
         echo "=== Pushing ${FULL_IMG} ==="
         buildah push --storage-driver=overlay --tls-verify=false "${FULL_IMG}"
 
-        # Get digest via buildah inspect (avoids Go template curly-brace issues)
+        # Get digest
         DIGEST=$(buildah inspect --type image "${FULL_IMG}" 2>/dev/null | grep -o '"digest":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
         echo -n "${DIGEST}" | tee /tekton/results/image_digest
         echo -n "${FULL_IMG}" | tee /tekton/results/image_url
