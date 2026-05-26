@@ -22,7 +22,7 @@ spec:
         image: image-registry.openshift-image-registry.svc:5000/online-boutique-cicd/cartservice:main
         livenessProbe:
           grpc:
-            port: 7070
+            port: 3550
           initialDelaySeconds: 15
           periodSeconds: 10
         name: server
@@ -30,7 +30,7 @@ spec:
         - containerPort: 7070
         readinessProbe:
           grpc:
-            port: 7070
+            port: 3550
           initialDelaySeconds: 15
         resources:
           limits:
