@@ -33,27 +33,6 @@ spec:
           requests:
             cpu: 300m
             memory: 256Mi
-      initContainers:
-      - command:
-        - /bin/sh
-        - -c
-        - 'for i in 1 2 3 4 5 6 7 8 9 10 11 12; do echo "Attempt $i: Pinging frontend:
-          ${FRONTEND_ADDR}..."; STATUSCODE=$(busybox wget --server-response http://${FRONTEND_ADDR}
-          2>&1 | awk "/^  HTTP/{print \$2}"); if [ "$STATUSCODE" = "200" ]; then echo
-          "Frontend reachable"; exit 0; fi; sleep 10; done; echo "Error: Could not
-          reach frontend"; exit 1'
-        env:
-        - name: FRONTEND_ADDR
-          value: frontend:80
-        image: image-registry.openshift-image-registry.svc:5000/online-boutique-cicd/loadgenerator:main
-        name: frontend-check
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          privileged: false
-          readOnlyRootFilesystem: true
       restartPolicy: Always
       serviceAccountName: loadgenerator
       terminationGracePeriodSeconds: 5
