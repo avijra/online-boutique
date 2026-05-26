@@ -27,7 +27,7 @@ spec:
           periodSeconds: 10
         name: server
         ports:
-        - containerPort: 7070
+        - containerPort: 3550
         readinessProbe:
           grpc:
             port: 3550
@@ -52,7 +52,7 @@ spec:
   ports:
   - name: grpc
     port: 7070
-    targetPort: 7070
+    targetPort: 3550
   selector:
     app: cartservice
   type: ClusterIP
