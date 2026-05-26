@@ -64,7 +64,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: image-registry.openshift-image-registry.svc:5000/online-boutique-cicd/loadgenerator:placeholder
+        image: image-registry.openshift-image-registry.svc:5000/online-boutique-cicd/loadgenerator:main
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
@@ -77,7 +77,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: image-registry.openshift-image-registry.svc:5000/online-boutique-cicd/loadgenerator:placeholder
+        image: image-registry.openshift-image-registry.svc:5000/online-boutique-cicd/loadgenerator:main
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
